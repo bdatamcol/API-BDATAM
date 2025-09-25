@@ -8,7 +8,7 @@ export class InventoryRoutes {
 
         const router = Router();
         
-        router.get('/', getInventory);
+        router.get('/inventario', getInventory);
         
         return router;
     }

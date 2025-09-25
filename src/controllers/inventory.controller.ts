@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import { getPool } from "../data";
+import { buildPaginationLinks } from "../utils/pagination.utils";
 
 export const getInventory = async (req: Request, res: Response) => {
     const { ciudad, empresa } = req.query;
@@ -62,23 +63,8 @@ export const getInventory = async (req: Request, res: Response) => {
 
         const total = totalResult.recordset[0].total;
 
-        //  reconstruimos los parámetros de query dinámicamente
-        const queryParams = new URLSearchParams({
-            ...Object.fromEntries(Object.entries(req.query).filter(([key]) => key !== "page" && key !== "limit")),
-            limit: limit.toString(),
-        });
-        
-        const baseUrl = `${req.protocol}://${req.get("host")}${req.baseUrl}${req.path}`;
-
-        const next =
-            limit * page >= total
-                ? null
-                : `${baseUrl}?${queryParams.toString()}&page=${page + 1}`;
-
-        const prev =
-            page - 1 <= 0
-                ? null
-                : `${baseUrl}?${queryParams.toString()}&page=${page - 1}`;
+        // Construcción de enlaces de paginación
+        const { next, prev } = buildPaginationLinks(req, page, limit, total);
 
         res.json({
             page,

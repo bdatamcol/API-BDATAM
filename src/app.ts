@@ -1,8 +1,15 @@
-import express, { Router } from 'express';
-import path from 'path';
-import cors from 'cors';
-import {envs} from './config/envs';
-import { InventoryRoutes } from './routes/inventory.routes';
+import express from "express";
+import cors from "cors";
+import { envs } from "./config/envs";
+import { InventoryRoutes } from "./routes/inventory.routes";
+import swaggerUI from "swagger-ui-express";
+import swaggerDocument from "../swagger-output.json";
+
+const corsOptions = {
+    origin: ["http://10.230.60.18:4200", "http://10.230.60.18"],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+};
 
 const app = express();
 
@@ -10,12 +17,16 @@ const app = express();
 app.use(express.json());
 
 // cors
-app.use(cors());
+app.use(cors(corsOptions));
 
 // rutas
-app.use('/api/inventario', InventoryRoutes.routes);
+app.use("/api", InventoryRoutes.routes);
+
+// documentación de la API
+app.use("/api/docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
 
 const PORT = envs.port || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 API corriendo en http://localhost:${PORT}`);
+    console.log(`📚 Documentación de la API disponible en http://localhost:${PORT}/api/docs`);
 });
