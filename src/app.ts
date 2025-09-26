@@ -6,7 +6,7 @@ import swaggerUI from "swagger-ui-express";
 import swaggerDocument from "../swagger-output.json";
 
 const corsOptions = {
-    origin: ["http://10.230.60.18:4200", "http://10.230.60.18"],
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE"],
     allowedHeaders: ["Content-Type", "Authorization"],
 };

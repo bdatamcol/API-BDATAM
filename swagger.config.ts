@@ -1,4 +1,5 @@
 import swaggerAutogen from "swagger-autogen";
+import { envs } from "./src/config/envs";
 
 const outputFile = "./swagger-output.json";
 const endpointsFiles = [
@@ -11,7 +12,7 @@ const doc = {
     title: "API BDATAM",
     description: "API para consultar inventario, facturación y comparativas de las empresas",
   },
-  host: "localhost:3000/api",
+  host: envs.hostApi || "localhost:3000",
   schemes: ["http"],
 };
 
