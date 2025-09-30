@@ -12,6 +12,13 @@ const dbConfig = {
         encrypt: false,
         trustServerCertificate: true,
     },
+    pool: {
+        max: 10,
+        min: 0,
+        idleTimeoutMillis: 30000,
+    },
+    requestTimeout: 300000,
+    connectionTimeout: 60000,
 };
 
 

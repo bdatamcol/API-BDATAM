@@ -8,4 +8,7 @@ export const envs = {
     dbUser: get('DB_USER').required().asString(),
     dbPassword: get('DB_PASSWORD').required().asString(),
     hostApi: get('HOST_API').default('http://localhost:3000').asString(),
+    jwtSecret: get('JWT_SECRET').required().asString(),
+    jwtExpiresIn: get('JWT_EXPIRES_IN').required().asString(),
+    apiKey: get('API_KEY').required().asString(),
 };
