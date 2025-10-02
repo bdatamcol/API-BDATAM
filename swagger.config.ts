@@ -6,7 +6,9 @@ const endpointsFiles = [
   "./src/app.ts",
   "./src/routes/inventory.routes.ts",
   "./src/routes/auth.routes.ts",
-  "./src/routes/invoice.routes.ts"
+  "./src/routes/invoice.routes.ts",
+  "./src/routes/products.routes.ts",
+  "./src/routes/sync.routes.ts"
 ];
 
 const doc = {

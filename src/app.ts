@@ -10,6 +10,8 @@ import swaggerUI from "swagger-ui-express";
 const swaggerDocument = require("../swagger-output.json");
 import { errorHandler, notFoundHandler } from "./middlewares/error.middleware";
 import { InvoiceRoutes } from "./routes/invoice.routes";
+import { ProductsRoutes } from "./routes/products.routes";
+import { SyncRoutes } from "./routes/sync.routes";
 
 const corsOptions = {
     origin: "*",
@@ -56,6 +58,8 @@ app.use(cors(corsOptions));
 app.use("/api", AuthRoutes.routes);
 app.use("/api", InventoryRoutes.routes);
 app.use("/api", InvoiceRoutes.routes);
+app.use("/api", ProductsRoutes.routes);
+app.use("/api", SyncRoutes.routes);
 
 // documentación de la API - proteger con API Key en producción
 if (process.env.NODE_ENV === 'production') {
