@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { executeQuery } from '../data';
+import { executeQuery, executeMySQLQuery } from '../data';
 
 interface NovasoftProduct {
     cod_item: string;
@@ -156,21 +156,129 @@ export class ProductsController {
         try {
             const { cods } = req.body;
 
-            if (!cods) {
+            if (!cods || typeof cods !== 'string') {
                 return res.status(400).json({
                     success: false,
-                    message: 'Códigos de productos requeridos'
+                    message: 'Códigos de productos requeridos en formato string: "cod:precioNS:stockNS:precioAntesNS,..."'
                 });
             }
 
-            // TODO: Implementar conexión MySQL para WordPress/WooCommerce
-            // Esta función migrará la lógica de ws/getProdTV.php
+            // Import dinámico para evitar romper si tu archivo de conexión tiene otro nombre
+
+            const lista = cods.trim().replace(/,$/, '').split(',');
+            const comparisons: Array<{
+                codigo: string;
+                precioNS: number;
+                stockNS: number;
+                precioAntesNS: number;
+                precioRegularTV: number;
+                precioVentaTV: number;
+                stockTV: number;
+                precioActualTV: number;
+                estado: 'sincronizado' | 'no_sincronizado' | 'no_existe_tv';
+                necesitaSync: boolean;
+            }> = [];
+
+            let todosProdSync = ''; // Solo agregamos cuando existe en TV y no está sincronizado
+
+            // Consultas por cada código (similar a ws/getProdTV.php)
+            await Promise.all(
+                lista.map(async (itemRaw) => {
+                    const [codprod, precioNSRaw, stockNSRaw, precioAntesNSRaw] = itemRaw.split(':');
+                    const cod = (codprod || '').trim();
+                    const precioNS = Math.round(Number(precioNSRaw || 0));
+                    const stockNS = Math.ceil(Number(stockNSRaw || 0));
+                    const precioAntesNS = Math.round(Number(precioAntesNSRaw || 0));
+
+                    if (!cod) return;
+
+                    // Query basado en ws/getProdTV.php (usando LIKE para coincidir con SKU/EAN)
+                    const sql = `
+                        SELECT meta_key, meta_value
+                        FROM wp_postmeta
+                        WHERE meta_key IN ('_regular_price', '_sale_price', '_stock', '_price')
+                          AND post_id = (
+                              SELECT post_id FROM wp_postmeta
+                              WHERE (meta_key = '_sku' OR meta_key = '_alg_ean')
+                                AND meta_value LIKE ?
+                              LIMIT 1
+                          )
+                    `;
+                    const rows = await executeMySQLQuery(sql, [cod]) as Array<{ meta_key: string; meta_value: string }>;
+
+                    if (!rows || rows.length === 0) {
+                        // No está en tienda virtual
+                        comparisons.push({
+                            codigo: cod,
+                            precioNS,
+                            stockNS,
+                            precioAntesNS,
+                            precioRegularTV: 0,
+                            precioVentaTV: 0,
+                            stockTV: 0,
+                            precioActualTV: 0,
+                            estado: 'no_existe_tv',
+                            necesitaSync: true
+                        });
+                        return;
+                    }
+
+                    // Parsear metadatos
+                    let precioRegularTV = 0;
+                    let precioVentaTV = 0;
+                    let stockTV = 0;
+                    let precioActualTV = 0;
+
+                    for (const r of rows) {
+                        if (r.meta_key === '_regular_price') precioRegularTV = Math.round(Number(r.meta_value || 0));
+                        else if (r.meta_key === '_sale_price') precioVentaTV = Math.round(Number(r.meta_value || 0));
+                        else if (r.meta_key === '_stock') stockTV = Math.ceil(Number(r.meta_value || 0));
+                        else if (r.meta_key === '_price') precioActualTV = Math.round(Number(r.meta_value || 0));
+                    }
+
+                    // Comparación (migra comparaProd del PHP)
+                    const preciosIguales = precioNS === precioActualTV;
+                    const stocksIguales = stockNS === stockTV;
+                    const precioAnteriorIgual = precioAntesNS === precioRegularTV;
+
+                    const sincronizado = preciosIguales && stocksIguales && precioAnteriorIgual;
+
+                    comparisons.push({
+                        codigo: cod,
+                        precioNS,
+                        stockNS,
+                        precioAntesNS,
+                        precioRegularTV,
+                        precioVentaTV,
+                        stockTV,
+                        precioActualTV,
+                        estado: sincronizado ? 'sincronizado' : 'no_sincronizado',
+                        necesitaSync: !sincronizado
+                    });
+
+                    // En PHP solo agrega a todosProdSync cuando existe y no está sincronizado
+                    if (!sincronizado) {
+                        todosProdSync += `${cod}:${precioNS}:${stockNS}:${precioAntesNS},`;
+                    }
+                })
+            );
+
+            // Resumen
+            const total = comparisons.length;
+            const sincronizados = comparisons.filter(c => c.estado === 'sincronizado').length;
+            const noSincronizados = comparisons.filter(c => c.estado === 'no_sincronizado').length;
+            const noExistenEnTV = comparisons.filter(c => c.estado === 'no_existe_tv').length;
 
             res.json({
                 success: true,
-                message: 'Funcionalidad pendiente: conexión MySQL para Virtual Store',
-                data: [],
-                note: 'Necesita implementar conexión MySQL para consultar wp_postmeta'
+                data: comparisons,
+                resumen: {
+                    total,
+                    sincronizados,
+                    noSincronizados,
+                    noExistenEnTV
+                },
+                productosParaSync: todosProdSync.replace(/,$/, '') // quitar la última coma
             });
         } catch (error) {
             console.error('Error getting Virtual Store products:', error);

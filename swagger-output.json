@@ -177,7 +177,7 @@
       }
     },
     "/productos/virtual-store": {
-      "post": {
+      "get": {
         "description": "",
         "parameters": [
           {

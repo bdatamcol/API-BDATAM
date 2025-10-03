@@ -25,7 +25,7 @@ export class ProductsRoutes {
             asyncHandler(ProductsController.getProductsWithPrices));
 
         // Obtener productos de Tienda Virtual
-        router.post('/productos/virtual-store',
+        router.get('/productos/virtual-store',
             authenticateToken,
             asyncHandler(ProductsController.getVirtualStoreProducts)
         );

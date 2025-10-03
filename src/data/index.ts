@@ -1,2 +1,2 @@
 export { executeQuery, getPool } from './sqlserver.connect';
-export { mysqlPool } from './mysql.connect';
+export { mysqlPool, executeMySQLQuery } from './mysql.connect';
