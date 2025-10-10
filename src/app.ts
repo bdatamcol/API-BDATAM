@@ -35,18 +35,16 @@ app.use(helmet({
 }));
 
 // Rate limiting
-const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 100, // límite de 100 requests por IP
-    message: {
-        success: false,
-        error: 'Demasiadas solicitudes desde esta IP, por favor intente más tarde'
-    },
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-app.use('/api/', limiter);
+// const limiter = rateLimit({
+//     windowMs: 15 * 60 * 1000, // 15 minutos
+//     max: 100, // límite de 100 requests por IP
+//     message: {
+//         success: false,
+//         error: 'Demasiadas solicitudes desde esta IP, por favor intente más tarde'
+//     },
+//     standardHeaders: true,
+//     legacyHeaders: false,
+// });
 
 // parseo de body
 app.use(express.json());
