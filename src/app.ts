@@ -61,8 +61,10 @@ app.use("/api", InvoiceRoutes.routes);
 app.use("/api", ProductsRoutes.routes);
 app.use("/api", SyncRoutes.routes);
 
-// documentación de la API - proteger con API Key en producción
-if (process.env.NODE_ENV === 'production') {
+// documentación de la API - control por variable de entorno
+if (envs.docsPublic) {
+    app.use("/api/docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
+} else if (process.env.NODE_ENV === 'production') {
     app.use("/api/docs", ApiKeyMiddleware.validateApiKey, swaggerUI.serve, swaggerUI.setup(swaggerDocument));
 } else {
     app.use("/api/docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));

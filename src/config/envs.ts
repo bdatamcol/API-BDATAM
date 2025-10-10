@@ -20,4 +20,7 @@ export const envs = {
     mysqlUser: get('MYSQL_USER').required().asString(),
     mysqlPassword: get('MYSQL_PASSWORD').required().asString(),
     mysqlPort: get('MYSQL_PORT').required().asPortNumber(),
+
+    // Documentation settings
+    docsPublic: get('DOCS_PUBLIC').default('false').asBool(),
 };
