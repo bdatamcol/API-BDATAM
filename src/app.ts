@@ -1,3 +1,6 @@
+import https from "https";
+import fs from "fs";
+import path from "path";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -22,29 +25,31 @@ const corsOptions = {
 
 const app = express();
 
+app.enable("trust proxy");
 // Seguridad - Helmet
+// Helmet global (duro) para tu API
 app.use(helmet({
+    contentSecurityPolicy: false, // por ahora desactiva CSP
+    hsts: false, // evita forzar HTTPS
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
+
+// --- Swagger: Helmet específico y relajado SOLO para /api/docs ---
+const swaggerHelmet = helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],     // swagger-ui inyecta estilos inline
+            scriptSrc: ["'self'", "'unsafe-inline'"],    // swagger-ui inyecta script inline
             imgSrc: ["'self'", "data:", "https:"],
+            fontSrc: ["'self'", "data:"],
+            connectSrc: ["'self'"],
         },
     },
-}));
-
-// Rate limiting
-// const limiter = rateLimit({
-//     windowMs: 15 * 60 * 1000, // 15 minutos
-//     max: 100, // límite de 100 requests por IP
-//     message: {
-//         success: false,
-//         error: 'Demasiadas solicitudes desde esta IP, por favor intente más tarde'
-//     },
-//     standardHeaders: true,
-//     legacyHeaders: false,
-// });
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+});
 
 // parseo de body
 app.use(express.json());
@@ -61,11 +66,11 @@ app.use("/api", SyncRoutes.routes);
 
 // documentación de la API - control por variable de entorno
 if (envs.docsPublic) {
-    app.use("/api/docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
-} else if (process.env.NODE_ENV === 'production') {
-    app.use("/api/docs", ApiKeyMiddleware.validateApiKey, swaggerUI.serve, swaggerUI.setup(swaggerDocument));
+    app.use("/api/docs", swaggerHelmet, swaggerUI.serve, swaggerUI.setup(swaggerDocument));
+} else if (process.env.NODE_ENV === "production") {
+    app.use("/api/docs", swaggerHelmet, ApiKeyMiddleware.validateApiKey, swaggerUI.serve, swaggerUI.setup(swaggerDocument));
 } else {
-    app.use("/api/docs", swaggerUI.serve, swaggerUI.setup(swaggerDocument));
+    app.use("/api/docs", swaggerHelmet, swaggerUI.serve, swaggerUI.setup(swaggerDocument));
 }
 
 // Middleware de manejo de errores (debe ir después de todas las rutas)
@@ -74,10 +79,25 @@ app.use(errorHandler);
 // Middleware para rutas no encontradas (debe ir al final)
 app.use(notFoundHandler);
 
-const PORT = envs.port || 3000;
+const PORT = Number(envs.port || 3000);
 app.listen(PORT, () => {
     console.log(`🚀 API corriendo en http://localhost:${PORT}`);
-    console.log(`📚 Documentación de la API disponible en http://localhost:${PORT}/api/docs`);
-    console.log(`🔑 Endpoints de autenticación disponibles en http://localhost:${PORT}/api/auth/login`);
-    console.log(`🛡️  Seguridad: JWT + API Key habilitados`);
+    console.log(`📚 Docs: http://localhost:${PORT}/api/docs`);
 });
+
+const HTTPS_PORT = Number(process.env.HTTPS_PORT || 3001);
+const keyPath = path.resolve(__dirname, "../certs/key.pem");
+const certPath = path.resolve(__dirname, "../certs/cert.pem");
+
+if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+    const creds = {
+        key: fs.readFileSync(keyPath),
+        cert: fs.readFileSync(certPath),
+    };
+    https.createServer(creds, app).listen(HTTPS_PORT, () => {
+        console.log(`🔒 HTTPS corriendo en https://localhost:${HTTPS_PORT}`);
+        console.log(`📚 Docs (HTTPS): https://localhost:${HTTPS_PORT}/api/docs`);
+    });
+} else {
+    console.warn("⚠️ No se encontraron certs en /certs. Solo HTTP.");
+}
