@@ -85,7 +85,7 @@ app.listen(PORT, () => {
     console.log(`📚 Docs: http://localhost:${PORT}/api/docs`);
 });
 
-const HTTPS_PORT = Number(process.env.HTTPS_PORT || 3001);
+const HTTPS_PORT = Number(process.env.HTTPS_PORT || 3443);
 const keyPath = path.resolve(__dirname, "../certs/key.pem");
 const certPath = path.resolve(__dirname, "../certs/cert.pem");
 

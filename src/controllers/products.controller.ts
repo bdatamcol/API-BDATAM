@@ -39,7 +39,7 @@ export class ProductsController {
         try {
             const { bodega = '080', sucursal = 'cuc', empresa = 'cbb sas' } = req.query;
 
-            const query = `EXEC Consulta_Bodega_existencia '${bodega}', '${sucursal}', '${empresa}'`;
+            const query = `EXEC Consulta_Bodega_existencia_bdatam '${bodega}', '${sucursal}', '${empresa}'`;
 
             // Ejecutar en la base de datos WebVentas
             const result = await executeQuery(query, [], 'WebVentas');
