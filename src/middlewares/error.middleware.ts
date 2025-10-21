@@ -67,17 +67,17 @@ export const errorHandler = (
                      `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Log del error con información detallada
-    console.error(`[ERROR] ${new Date().toISOString()} | RequestID: ${requestId}`, {
-        error: err.name,
-        message: err.message,
-        stack: err.stack,
-        statusCode,
-        path: req.path,
-        method: req.method,
-        ip: req.ip,
-        userAgent: req.get('User-Agent'),
-        details: err.details
-    });
+    // console.error(`[ERROR] ${new Date().toISOString()} | RequestID: ${requestId}`, {
+    //     error: err.name,
+    //     message: err.message,
+    //     stack: err.stack,
+    //     statusCode,
+    //     path: req.path,
+    //     method: req.method,
+    //     ip: req.ip,
+    //     userAgent: req.get('User-Agent'),
+    //     details: err.details
+    // });
 
     // No exponer detalles de errores internos en producción
     if (process.env.NODE_ENV === 'production' && !err.isOperational) {

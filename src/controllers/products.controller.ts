@@ -50,7 +50,6 @@ export class ProductsController {
                 count: result.recordset.length
             });
         } catch (error) {
-            console.error('Error getting Novasoft products:', error);
             res.status(500).json({
                 success: false,
                 message: 'Error al obtener productos de Novasoft',
@@ -75,7 +74,6 @@ export class ProductsController {
                 count: result.recordset.length
             });
         } catch (error) {
-            console.error('Error getting price list:', error);
             res.status(500).json({
                 success: false,
                 message: 'Error al obtener lista de precios',
@@ -142,7 +140,6 @@ export class ProductsController {
                 todosLosCod: todosLosCod.slice(0, -1) // Remover la última coma
             });
         } catch (error) {
-            console.error('Error getting products with prices:', error);
             res.status(500).json({
                 success: false,
                 message: 'Error al obtener productos con precios',
@@ -281,7 +278,6 @@ export class ProductsController {
                 productosParaSync: todosProdSync.replace(/,$/, '') // quitar la última coma
             });
         } catch (error) {
-            console.error('Error getting Virtual Store products:', error);
             res.status(500).json({
                 success: false,
                 message: 'Error al obtener productos del Virtual Store',
@@ -321,7 +317,6 @@ export class ProductsController {
                 }
             });
         } catch (error) {
-            console.error('Error comparing products:', error);
             res.status(500).json({
                 success: false,
                 message: 'Error al comparar productos',
@@ -352,7 +347,6 @@ export class ProductsController {
                 database: database
             });
         } catch (error) {
-            console.error('Error executing custom query:', error);
             res.status(500).json({
                 success: false,
                 message: 'Error al ejecutar consulta personalizada',

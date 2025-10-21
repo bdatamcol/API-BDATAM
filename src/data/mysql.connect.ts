@@ -19,7 +19,6 @@ export async function executeMySQLQuery(query: string, params: any[] = []) {
         const [rows] = await mysqlPool.execute(query, params);
         return rows;
     } catch (error) {
-        console.error('Error executing MySQL query:', error);
         throw error;
     }
 }
@@ -28,7 +27,6 @@ export async function getMySQLConnection() {
     try {
         return await mysqlPool.getConnection();
     } catch (error) {
-        console.error('Error getting MySQL connection:', error);
         throw error;
     }
 }

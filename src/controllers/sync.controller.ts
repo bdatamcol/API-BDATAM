@@ -113,7 +113,6 @@ export class SyncController {
                     }
 
                 } catch (error) {
-                    console.error(`Error procesando producto ${productData}:`, error);
                     errors.push(`Error al procesar: ${productData}`);
                 }
             }
@@ -132,7 +131,6 @@ export class SyncController {
             res.json(result);
 
         } catch (error) {
-            console.error('Error en sincronización manual:', error);
             if (error instanceof AppError) {
                 throw error;
             }
@@ -180,7 +178,6 @@ export class SyncController {
             });
 
         } catch (error) {
-            console.error('Error obteniendo estado de sincronización:', error);
             throw new AppError('Error obteniendo estado de sincronización', 500);
         }
     }
@@ -219,7 +216,6 @@ export class SyncController {
             });
 
         } catch (error) {
-            console.error('Error obteniendo historial:', error);
             throw new AppError('Error obteniendo historial de sincronización', 500);
         }
     }
@@ -231,11 +227,9 @@ export class SyncController {
             // Migrar las funciones genSql() y updateTV() del PHP
 
             // Por ahora retornamos true como placeholder
-            console.log(`Actualizando producto ${code}: precio=${price}, stock=${stock}`);
             return true;
 
         } catch (error) {
-            console.error(`Error actualizando producto ${code}:`, error);
             return false;
         }
     }

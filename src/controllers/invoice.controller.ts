@@ -33,8 +33,6 @@ export const getInvoice = async (req: Request, res: Response) => {
         const yearFilter = (ano_doc && typeof ano_doc === 'string' && ano_doc.trim()) 
             ? ano_doc.trim() 
             : currentYear;
-
-        console.log(yearFilter);
         
         conditions.push("ANO_DOC = @ano_doc");
         request.input("ano_doc", yearFilter);
@@ -71,8 +69,6 @@ export const getInvoice = async (req: Request, res: Response) => {
             OFFSET ${offset} ROWS 
             FETCH NEXT ${limit} ROWS ONLY
         `;
-
-        console.log(query);
 
         // Consulta para contar total de registros
         const countQuery = `
@@ -177,7 +173,6 @@ export const getInvoice = async (req: Request, res: Response) => {
         });
 
     } catch (error: any) {
-        console.error('Error en getInvoice:', error);
         // Manejo específico de errores de base de datos
         if (error?.message?.includes('Connection')) {
             throw new AppError('Error de conexión a la base de datos', 503, {

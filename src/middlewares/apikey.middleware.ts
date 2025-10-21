@@ -73,7 +73,6 @@ export class ApiKeyMiddleware {
             
             next();
         } catch (error) {
-            console.error('Error en API Key middleware:', error);
             return res.status(500).json({
                 success: false,
                 error: 'Error interno del servidor'

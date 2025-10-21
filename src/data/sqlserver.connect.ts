@@ -27,7 +27,6 @@ export async function getPool() {
         const pool = await sql.connect(dbConfig);
         return pool;
     } catch (error) {
-        console.error('Error getting database pool:', error);
         throw error;
     }
 }
@@ -57,7 +56,6 @@ export async function executeQuery(query: string, params: any[] = [], database?:
         const result = await request.query(query);
         return result;
     } catch (error) {
-        console.error('Error executing query:', error);
         throw error;
     } finally {
         if (pool && database) {

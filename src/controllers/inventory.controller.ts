@@ -115,8 +115,6 @@ export const getInventory = async (req: Request, res: Response) => {
             FETCH NEXT ${limit} ROWS ONLY
         `;
 
-        console.log(query);
-
         // Consulta para contar total de registros
         const countQuery = `
             SELECT COUNT(*) as total 

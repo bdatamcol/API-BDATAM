@@ -23,4 +23,12 @@ export const envs = {
 
     // Documentation settings
     docsPublic: get('DOCS_PUBLIC').default('false').asBool(),
+
+    // Authentication Configuration
+    authUsername: get('AUTH_USERNAME').required().asString(),
+    authPassword: get('AUTH_PASSWORD').required().asString(),
+    authUsername2: get('AUTH_USERNAME2').required().asString(),
+    authPassword2: get('AUTH_PASSWORD2').required().asString(),
+    authRole: get('AUTH_ROLE').required().asString(),
+    authRole2: get('AUTH_ROLE2').required().asString(),
 };

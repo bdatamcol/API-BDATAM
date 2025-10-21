@@ -70,9 +70,16 @@ interface AuthResponse {
 export class AuthController {
     
     private static readonly VALID_USERS = [
-        { username: 'admin', password: 'Bdatam2025!', role: 'admin' },
-        { username: 'user', password: 'User2025!', role: 'user' },
-        { username: 'api', password: 'Api2025!', role: 'api' }
+        { 
+            username: envs.authUsername, 
+            password: envs.authPassword, 
+            role: envs.authRole 
+        },
+        { 
+            username: envs.authUsername2, 
+            password: envs.authPassword2, 
+            role: envs.authRole2 
+        }
     ];
 
     /**
@@ -158,8 +165,6 @@ export class AuthController {
             if (error instanceof AppError) {
                 throw error;
             }
-            
-            console.error('Error en login:', error);
             throw new AppError('Error al procesar la autenticación', 500);
         }
     }
@@ -225,8 +230,6 @@ export class AuthController {
             if (error instanceof AppError) {
                 throw error;
             }
-            
-            console.error('Error al validar token:', error);
             throw new AppError('Error al validar el token', 500);
         }
     }
@@ -293,8 +296,6 @@ export class AuthController {
             if (error instanceof AppError) {
                 throw error;
             }
-            
-            console.error('Error al refrescar token:', error);
             throw new AppError('Error al refrescar el token', 500);
         }
     }
