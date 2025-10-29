@@ -212,15 +212,54 @@ export const getInventory = async (req: Request, res: Response) => {
                 detail: 'Por favor intente nuevamente en unos momentos'
             });
         }
-        
+
         if (error?.message?.includes('timeout')) {
             throw new AppError('Tiempo de espera agotado', 504, {
                 detail: 'La consulta tardó demasiado tiempo, intente con un límite menor'
             });
         }
-        
+
         throw new AppError('Error al obtener el inventario', 500, {
             detail: process.env.NODE_ENV === 'development' ? (error as Error).message : 'Error interno del servidor'
         });
     }
 };
+
+// inventario agrupado por marcas
+export const getInventoryByBrand = async (req: Request, res: Response) => {
+
+    try {
+
+        const pool = await getPool();
+
+        /* SELECT 
+    des_mar,
+    SUM(existencia) AS CUNTA,
+    SUM(CAST(VALOR AS DECIMAL(18,2))) AS Valor_por_marca
+FROM V_INV_BIN007_POWER_BI_TOTAL
+GROUP BY des_mar
+ORDER BY Valor_por_marca DESC; */
+
+        const sql = `
+        SELECT 
+            des_mar AS marca,
+            SUM(existencia) AS cantidad_total,
+            SUM(CAST(VALOR AS DECIMAL(18,2))) AS valor_total
+        FROM V_INV_BIN007_POWER_BI_TOTAL
+        GROUP BY des_mar
+        ORDER BY valor_total DESC;
+        `;
+
+        const result = await pool.request().query(sql);
+        return res.status(200).json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error("Error en getInventoryByBrand:", error);
+        throw new AppError("Error al obtener el inventario por marca", 500, {
+            detail: process.env.NODE_ENV === "development" ? (error as Error).message : "Error interno del servidor",
+        });
+    }
+}

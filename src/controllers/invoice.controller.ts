@@ -1,194 +1,158 @@
+// controllers/facturacion.controller.ts
 import { Request, Response } from "express";
-import { buildPaginationLinks } from "../utils";
-import { AppError } from "../middlewares/error.middleware";
+const sql = require('mssql');
 import { getPool } from "../data";
+import { AppError } from "../middlewares/error.middleware";
+import { buildPaginationLinks } from "../utils";
+
+const VIEW = "V_INV_BVEN020_POWER_BI_TOTAL";
+const withDateFormat = (q: string) => `SET DATEFORMAT dmy; ${q}`;
+
+// columnas candidatas que sí existen típicamente en V_INV_BVEN020_POWER_BI_TOTAL (según tu Excel)
+const ORDER_CANDIDATES = ["tip_doc", "num_doc", "ven_net", "mon_iva", "valor", "cantidad", "tienda", "nom_ven", "des_mar", "nom_gru"];
+const DATE_CANDIDATES = ["fecha", "fec_doc", "fecha_doc", "fch_doc", "fecha_emision"]; // ajustado a esta vista
+
+async function getColumns(pool: any) {
+    const r = await pool.request()
+        .input("v", sql.NVarChar, VIEW)
+        .query(`
+      SELECT COLUMN_NAME
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_NAME = @v
+    `);
+    return new Set<string>(r.recordset.map((x: any) => x.COLUMN_NAME.toLowerCase()));
+}
+
+function firstExisting(cols: Set<string>, candidates: string[]) {
+    return candidates.find(c => cols.has(c.toLowerCase()));
+}
 
 export const getInvoice = async (req: Request, res: Response) => {
-
     try {
-
-        const {
-            tienda,
-            ano_doc,
-            cod_mar,
-            cod_grupo,
-            cod_subgrupo,
-            page: pageQuery,
-            limit: limitQuery
-        } = req.query;
-
-        // Parámetros de paginación con valores por defecto seguros
-        const page = Math.max(1, parseInt((pageQuery as string) || "1", 10));
-        const limit = Math.min(Math.max(1, parseInt((limitQuery as string) || "100", 10)), 1000); // Máximo 1000 registros
+        const { page: p, limit: l, orderBy } = req.query;
+        const page = Math.max(1, parseInt((p as string) || "1", 10));
+        const limit = Math.min(Math.max(1, parseInt((l as string) || "100", 10)), 1000);
         const offset = (page - 1) * limit;
 
         const pool = await getPool();
+        const cols = await getColumns(pool);
 
-        // Construir consulta SQL con filtros seguros
-        const conditions: string[] = [];
-        const request = pool.request();
-
-        // FILTRO OBLIGATORIO POR AÑO - usar año actual por defecto
-        const currentYear = new Date().getFullYear().toString();
-        const yearFilter = (ano_doc && typeof ano_doc === 'string' && ano_doc.trim()) 
-            ? ano_doc.trim() 
-            : currentYear;
-        
-        conditions.push("ANO_DOC = @ano_doc");
-        request.input("ano_doc", yearFilter);
-
-        // Agregar filtros adicionales de manera segura usando parámetros
-        if (tienda && typeof tienda === 'string' && tienda.trim()) {
-            conditions.push("tienda = @tienda");
-            request.input("tienda", tienda.trim());
+        // columna de fecha real en ESTA vista
+        const dateCol = firstExisting(cols, DATE_CANDIDATES);
+        if (!dateCol) {
+            throw new AppError(
+                "La vista no expone una columna de fecha conocida",
+                400,
+                { detail: `Esperaba una de: ${DATE_CANDIDATES.join(", ")}` }
+            );
         }
 
-        if (cod_mar && typeof cod_mar === 'string' && cod_mar.trim()) {
-            conditions.push("cod_mar = @cod_mar");
-            request.input("cod_mar", cod_mar.trim());
-        }
+        // TIPO existe en tu Excel; si no existiera, quitamos ese filtro
+        const hasTIPO = cols.has("tipo");
+        const tipoWhere = hasTIPO ? "TIPO = @tipo" : null;
 
-        if (cod_grupo && typeof cod_grupo === 'string' && cod_grupo.trim()) {
-            conditions.push("cod_grupo = @cod_grupo");
-            request.input("cod_grupo", cod_grupo.trim());
-        }
+        // filtro por año 2025 usando la fecha real
+        const yearWhere = `YEAR(TRY_CONVERT(date, [${dateCol}], 103)) = @year`;
+        console.log(yearWhere);
 
-        if (cod_subgrupo && typeof cod_subgrupo === 'string' && cod_subgrupo.trim()) {
-            conditions.push("cod_subgrupo = @cod_subgrupo");
-            request.input("cod_subgrupo", cod_subgrupo.trim());
-        }
+        const whereClause = "WHERE " + [tipoWhere, yearWhere].filter(Boolean).join(" AND ");
 
-        // Siempre habrá condiciones porque el año es obligatorio
-        const whereConditions = 'WHERE ' + conditions.join(' AND ');
+        // ORDER BY solo con columnas que existen aquí
+        const allowedOrder = ORDER_CANDIDATES.filter(c => cols.has(c));
+        const defaultOrder = (allowedOrder.includes("tip_doc") && allowedOrder.includes("num_doc"))
+            ? "tip_doc, num_doc"
+            : (allowedOrder[0] || "1"); // "1" => orden trivial si faltara todo (no debería)
+        const safeOrderBy =
+            typeof orderBy === "string" &&
+                orderBy.split(",").map(s => s.trim().toLowerCase()).every(c => cols.has(c))
+                ? (orderBy as string)
+                : defaultOrder;
 
-        // Consulta principal con paginación
-        const query = `
-            SELECT * FROM V_INV_BVEN020_POWER_BI_TOTAL_DEV2_CUE 
-            ${whereConditions}
-            ORDER BY ID
-            OFFSET ${offset} ROWS 
-            FETCH NEXT ${limit} ROWS ONLY
-        `;
+        // SQLs
+        const dataSql = withDateFormat(`
+      SELECT *
+      FROM ${VIEW}
+      ${whereClause}
+      ORDER BY ${safeOrderBy}
+      OFFSET ${offset} ROWS
+      FETCH NEXT ${limit} ROWS ONLY;
+    `);
 
-        // Consulta para contar total de registros
-        const countQuery = `
-            SELECT COUNT(*) as total 
-            FROM V_INV_BVEN020_POWER_BI_TOTAL_DEV2_CUE 
-            ${whereConditions}
-        `;
+        const countSql = withDateFormat(`
+      SELECT COUNT(*) AS total
+      FROM ${VIEW}
+      ${whereClause};
+    `);
 
-        // Consulta para obtener totales/sumas de los campos numéricos
-        const summaryQuery = `
-            SELECT 
-                SUM(CAST(cantidad AS DECIMAL(18,2))) as total_cantidad,
-                SUM(CAST(venta AS DECIMAL(18,2))) as total_venta,
-                SUM(CAST(venta_descuento AS DECIMAL(18,2))) as total_venta_descuento,
-                SUM(CAST(monto_iva AS DECIMAL(18,2))) as total_monto_iva,
-                SUM(CAST(monto_descuento AS DECIMAL(18,2))) as total_monto_descuento,
-                SUM(CAST(total AS DECIMAL(18,2))) as total_general
-            FROM V_INV_BVEN020_POWER_BI_TOTAL_DEV2_CUE 
-            ${whereConditions}
-        `;
+        const sumSql = withDateFormat(`
+      SELECT
+        SUM(CAST(cantidad AS DECIMAL(38,6)))                                AS total_cantidad,
+        SUM(CAST(ven_net  AS DECIMAL(38,6)))                                AS total_venta_neta,
+        SUM(CAST(mon_iva  AS DECIMAL(38,6)))                                AS total_monto_iva,
+        SUM(CAST(val_def  AS DECIMAL(38,6)))                                AS total_descuento,
+        SUM(CAST(valor    AS DECIMAL(38,6)))                                AS total_valor,
+        SUM(CAST(COALESCE(ven_net,0)+COALESCE(mon_iva,0) AS DECIMAL(38,6))) AS total_con_iva
+      FROM ${VIEW}
+      ${whereClause};
+    `);
 
-        // Crear request para la consulta de conteo con los mismos parámetros
-        const countRequest = pool.request();
+        // bind de parámetros (¡nombres idénticos a la SQL!)
+        const bind = (r: any) => {
+            if (hasTIPO) r.input("tipo", sql.NVarChar, "FACTURA");
+            r.input("year", sql.Int, 2025);
+        };
+        const dataReq = pool.request(); bind(dataReq);
+        const countReq = pool.request(); bind(countReq);
+        const sumReq = pool.request(); bind(sumReq);
 
-        // Agregar el filtro de año obligatorio al request de conteo
-        countRequest.input("ano_doc", yearFilter);
-
-        if (tienda && typeof tienda === 'string' && tienda.trim()) {
-            countRequest.input("tienda", tienda.trim());
-        }
-        if (cod_mar && typeof cod_mar === 'string' && cod_mar.trim()) {
-            countRequest.input("cod_mar", cod_mar.trim());
-        }
-        if (cod_grupo && typeof cod_grupo === 'string' && cod_grupo.trim()) {
-            countRequest.input("cod_grupo", cod_grupo.trim());
-        }
-        if (cod_subgrupo && typeof cod_subgrupo === 'string' && cod_subgrupo.trim()) {
-            countRequest.input("cod_subgrupo", cod_subgrupo.trim());
-        }
-
-        // Crear request para la consulta de totales con los mismos parámetros
-        const summaryRequest = pool.request();
-
-        // Agregar el filtro de año obligatorio al request de totales
-        summaryRequest.input("ano_doc", yearFilter);
-
-        if (tienda && typeof tienda === 'string' && tienda.trim()) {
-            summaryRequest.input("tienda", tienda.trim());
-        }
-        if (cod_mar && typeof cod_mar === 'string' && cod_mar.trim()) {
-            summaryRequest.input("cod_mar", cod_mar.trim());
-        }
-        if (cod_grupo && typeof cod_grupo === 'string' && cod_grupo.trim()) {
-            summaryRequest.input("cod_grupo", cod_grupo.trim());
-        }
-        if (cod_subgrupo && typeof cod_subgrupo === 'string' && cod_subgrupo.trim()) {
-            summaryRequest.input("cod_subgrupo", cod_subgrupo.trim());
-        }
-
-        // Ejecutar consultas en paralelo para mejor rendimiento
-        const [result, totalResult, summaryResult] = await Promise.all([
-            request.query(query),
-            countRequest.query(countQuery),
-            summaryRequest.query(summaryQuery)
+        const [dataRs, countRs, sumRs] = await Promise.all([
+            dataReq.query(dataSql),
+            countReq.query(countSql),
+            sumReq.query(sumSql),
         ]);
 
-        const data = result.recordset;
-        const total = totalResult.recordset[0].total;
-        const summary = summaryResult.recordset[0];
-        const totalPages = Math.ceil(total / limit);
-
-        // Construir enlaces de paginación
+        const data = dataRs.recordset || [];
+        const total = (countRs.recordset?.[0]?.total as number) ?? 0;
+        const s = sumRs.recordset?.[0] || {};
+        const totalPages = Math.max(1, Math.ceil(total / limit));
         const { next, prev } = buildPaginationLinks(req, page, limit, total);
 
-        // Respuesta exitosa con metadata
         return res.status(200).json({
             success: true,
-            page,
-            limit,
-            total,
-            totalPages,
-            hasNext: page < totalPages,
-            hasPrev: page > 1,
-            next,
-            prev,
-            data,
+            notice: `Filtro: ${(hasTIPO ? "TIPO='FACTURA', " : "")}YEAR(${dateCol})=2025 - vista ${VIEW}`,
+            page, limit, total, totalPages,
+            hasNext: page < totalPages, hasPrev: page > 1,
+            next, prev, orderBy: safeOrderBy,
             summary: {
-                total_cantidad: summary.total_cantidad || 0,
-                total_venta: summary.total_venta || 0,
-                total_venta_descuento: summary.total_venta_descuento || 0,
-                total_monto_iva: summary.total_monto_iva || 0,
-                total_monto_descuento: summary.total_monto_descuento || 0,
-                total_general: summary.total_general || 0
+                total_cantidad: Number(s?.total_cantidad || 0),
+                total_venta_neta: Number(s?.total_venta_neta || 0),
+                total_monto_iva: Number(s?.total_monto_iva || 0),
+                total_descuento: Number(s?.total_descuento || 0),
+                total_valor: Number(s?.total_valor || 0),
+                total_con_iva: Number(s?.total_con_iva || 0),
             },
-            filters: {
-                tienda: tienda || null,
-                ano_doc: yearFilter, // Mostrar el año que se está usando (actual o especificado)
-                cod_mar: cod_mar || null,
-                cod_grupo: cod_grupo || null,
-                cod_subgrupo: cod_subgrupo || null
-            }
+            data,
         });
-
     } catch (error: any) {
-        // Manejo específico de errores de base de datos
-        if (error?.message?.includes('Connection')) {
-            throw new AppError('Error de conexión a la base de datos', 503, {
-                detail: 'Por favor intente nuevamente en unos momentos'
+        console.error("Error en getInvoice:", error);
+        if (error?.number === 153 && /FETCH\s+NEXT/i.test(error?.message || "")) {
+            // Suele ser porque la SQL quedó inválida por un parámetro faltante o ORDER BY inválido
+            return res.status(400).json({
+                success: false,
+                message: "La consulta quedó inválida para paginar (OFFSET/FETCH).",
+                hint: "Revisa que los parámetros enlazados coincidan con los del WHERE y que las columnas del ORDER BY existan en la vista.",
+                error: process.env.NODE_ENV === "development" ? error.message : undefined,
             });
         }
-
-        if (error?.message?.includes('timeout')) {
-            throw new AppError('Tiempo de espera agotado', 504, {
-                detail: 'La consulta tardó demasiado tiempo, intente con un límite menor'
+        if (error?.number === 242 || /date/.test((error?.message || "").toLowerCase())) {
+            return res.status(400).json({
+                success: false,
+                message: "Error al convertir fechas",
+                detail: "Se fuerza DATEFORMAT dmy; si persiste, hay filas con formato inválido.",
             });
         }
-
-        throw new AppError('Error al obtener las ventas', 500, {
-            detail: process.env.NODE_ENV === 'development' ? (error as Error).message : 'Error interno del servidor'
+        throw new AppError("Error al obtener las ventas", 500, {
+            detail: process.env.NODE_ENV === "development" ? error.message : "Error interno del servidor",
         });
     }
-
-}
+};
