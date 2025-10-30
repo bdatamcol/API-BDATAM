@@ -225,32 +225,39 @@ export const getInventory = async (req: Request, res: Response) => {
     }
 };
 
-// inventario agrupado por marcas
-export const getInventoryByBrand = async (req: Request, res: Response) => {
+// inventario agrupado por marcas, empresa
+export const getInventoryGrouped = async (req: Request, res: Response) => {
+
+    const { marca, empresa } = req.query;
 
     try {
 
         const pool = await getPool();
+        const request = pool.request();
 
-        /* SELECT 
-    des_mar,
-    SUM(existencia) AS CUNTA,
-    SUM(CAST(VALOR AS DECIMAL(18,2))) AS Valor_por_marca
-FROM V_INV_BIN007_POWER_BI_TOTAL
-GROUP BY des_mar
-ORDER BY Valor_por_marca DESC; */
+        if (marca && typeof marca === 'string' && marca.trim()) {
+            request.input("marca", marca.trim());
+        }
+        if (empresa && typeof empresa === 'string' && empresa.trim()) {
+            request.input("empresa", empresa.trim());
+        }
 
         const sql = `
         SELECT 
-            des_mar AS marca,
-            SUM(existencia) AS cantidad_total,
-            SUM(CAST(VALOR AS DECIMAL(18,2))) AS valor_total
+            des_mar,
+            empresa,
+            ciudad,
+            SUM(existencia) AS TotalExistencias,
+            SUM(CAST(VALOR AS DECIMAL(18,2))) AS Valor_por_marca
         FROM V_INV_BIN007_POWER_BI_TOTAL
-        GROUP BY des_mar
-        ORDER BY valor_total DESC;
+        WHERE 1=1
+            ${marca ? "AND des_mar = @marca" : ""}
+            ${empresa ? "AND empresa = @empresa" : ""}
+        GROUP BY des_mar, empresa, ciudad
+        ORDER BY Valor_por_marca DESC
         `;
 
-        const result = await pool.request().query(sql);
+        const result = await request.query(sql);
         return res.status(200).json({
             success: true,
             data: result.recordset
