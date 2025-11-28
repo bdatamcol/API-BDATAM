@@ -15,6 +15,8 @@ import { errorHandler, notFoundHandler } from "./middlewares/error.middleware";
 import { InvoiceRoutes } from "./routes/invoice.routes";
 import { ProductsRoutes } from "./routes/products.routes";
 import { SyncRoutes } from "./routes/sync.routes";
+import { JapolandiaListRoutes } from "./routes/japolandia-list.routes";
+import { GarantyExtRoutes } from "./routes/garanty-ext.route";
 
 const corsOptions = {
     origin: "*",
@@ -63,6 +65,8 @@ app.use("/api", InventoryRoutes.routes);
 app.use("/api", InvoiceRoutes.routes);
 app.use("/api", ProductsRoutes.routes);
 app.use("/api", SyncRoutes.routes);
+app.use("/api", JapolandiaListRoutes.routes);
+app.use("/api", GarantyExtRoutes.routes);
 
 // documentación de la API - control por variable de entorno
 if (envs.docsPublic) {
