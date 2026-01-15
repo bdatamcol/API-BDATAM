@@ -56,17 +56,40 @@ export interface GarantyExtRow {
 export class GarantyExtController {
     static async getGarantyExtList(req: Request, res: Response) {
         try {
-            const { year: yearParam, page: pageParam = 1, limit: limitParam = 100 } = req.query;
+            const {
+                year,
+                startDate,
+                endDate,
+                page: pageParam = 1,
+                limit: limitParam = 100,
+            } = req.query;
 
-            const year = Number(yearParam);
             const page = Number(pageParam);
             const limit = Number(limitParam);
             const offset = (page - 1) * limit;
 
-            if (!yearParam || Number.isNaN(year)) {
+            let fechaInicio: string;
+            let fechaFin: string;
+
+            if (startDate) {
+                fechaInicio = String(startDate);
+                fechaFin = endDate
+                    ? String(endDate)
+                    : new Date().toISOString().substring(0, 10);
+            } else if (year) {
+                const y = Number(year);
+                if (Number.isNaN(y)) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "El parámetro year debe ser numérico",
+                    });
+                }
+                fechaInicio = `${y}-01-01`;
+                fechaFin = `${y + 1}-01-01`;
+            } else {
                 return res.status(400).json({
                     success: false,
-                    message: "Debe enviar el parámetro year numérico. Ejemplo: /garanty-list?year=2025",
+                    message: "Debe enviar year o startDate",
                 });
             }
 
@@ -77,10 +100,6 @@ export class GarantyExtController {
                     AND cab.per_doc = cue.per_doc
                     AND cab.tip_doc = cue.tip_doc
                     AND cab.num_doc = cue.num_doc
-                INNER JOIN dbo.inv_bodegas bod WITH (NOLOCK)
-                    ON bod.cod_bod = cue.bodega
-                INNER JOIN dbo.gen_vendedor ven WITH (NOLOCK)
-                    ON cab.vendedor = ven.cod_ven
                 INNER JOIN dbo.inv_items ite WITH (NOLOCK)
                     ON cue.item = ite.cod_item
                 INNER JOIN dbo.inv_marca mar WITH (NOLOCK)
@@ -90,38 +109,63 @@ export class GarantyExtController {
                 INNER JOIN dbo.inv_subgrupos sub WITH (NOLOCK)
                     ON ite.cod_grupo = sub.cod_gru
                     AND ite.cod_subgrupo = sub.cod_sub
+                INNER JOIN dbo.gen_vendedor ven WITH (NOLOCK)
+                    ON cab.vendedor = ven.cod_ven
+                INNER JOIN dbo.inv_bodegas bod WITH (NOLOCK)
+                    ON bod.cod_bod = cue.bodega
                 INNER JOIN dbo.gen_sucursal suc WITH (NOLOCK)
                     ON cab.cod_suc = suc.cod_suc
                 INNER JOIN dbo.gen_ccosto cco WITH (NOLOCK)
                     ON cco.cod_cco = cab.cod_cco
                 INNER JOIN (
-                        SELECT 
-                            cab.cliente,
-                            cli.nit_cli AS cedula,
-                            cli.nom_cli AS nombre,
-                            cli.di1_cli AS direccion,
-                            cli.te1_cli AS telefono,
-                            CASE WHEN COUNT(1) > 1 THEN 'CLIENTE ANTIGUO'
-                                 ELSE 'CLIENTE NUEVO'
-                            END AS tipo_cliente
-                        FROM dbo.inv_cabdoc cab WITH (NOLOCK)
-                        INNER JOIN dbo.cxc_cliente cli
-                            ON cli.cod_cli = cab.cliente
-                        WHERE cab.tip_doc IN ('010','510','302')
-                        GROUP BY cab.cliente, cli.nit_cli, cli.nom_cli, cli.di1_cli, cli.te1_cli
+                    SELECT 
+                        cab.cliente,
+                        cli.nit_cli AS cedula,
+                        cli.nom_cli AS nombre,
+                        cli.di1_cli AS direccion,
+                        cli.te1_cli AS telefono,
+                        CASE 
+                            WHEN COUNT(1) > 1 THEN 'CLIENTE ANTIGUO'
+                            ELSE 'CLIENTE NUEVO'
+                        END AS tipo_cliente
+                    FROM dbo.inv_cabdoc cab WITH (NOLOCK)
+                    INNER JOIN dbo.cxc_cliente cli
+                        ON cli.cod_cli = cab.cliente
+                    WHERE cab.tip_doc IN ('010','510','302')
+                    GROUP BY cab.cliente, cli.nit_cli, cli.nom_cli, cli.di1_cli, cli.te1_cli
                 ) temp ON temp.cliente = cab.cliente
                 WHERE
                     cab.tip_doc IN ('510','302','010')
                     AND cue.cantidad > 0
                     AND cue.ven_net > 0
-                    AND sub.nom_sub NOT IN ('PUBLICIDAD Y MERCADEO')
+                    AND sub.nom_sub <> 'PUBLICIDAD Y MERCADEO'
                     AND cab.num_doc NOT LIKE '%<%'
                     AND temp.cedula <> '901634743'
                     AND mar.des_mar = 'ZURICH'
-                    AND YEAR(cab.fecha) = @param0
+                    AND cab.fecha >= @param0
+                    AND cab.fecha <  @param1
             `;
 
-            const countQuery = `SELECT COUNT(*) as total ${baseQuery}`;
+            const countQuery = `
+                SELECT COUNT(*) AS total
+                FROM dbo.inv_cabdoc cab WITH (NOLOCK)
+                INNER JOIN dbo.inv_cuedoc cue WITH (NOLOCK)
+                    ON cab.ano_doc = cue.ano_doc
+                    AND cab.per_doc = cue.per_doc
+                    AND cab.tip_doc = cue.tip_doc
+                    AND cab.num_doc = cue.num_doc
+                INNER JOIN dbo.inv_items ite WITH (NOLOCK)
+                    ON cue.item = ite.cod_item
+                INNER JOIN dbo.inv_marca mar WITH (NOLOCK)
+                    ON ite.cod_mar = mar.cod_mar
+                WHERE
+                    cab.tip_doc IN ('510','302','010')
+                    AND cue.cantidad > 0
+                    AND cue.ven_net > 0
+                    AND mar.des_mar = 'ZURICH'
+                    AND cab.fecha >= @param0
+                    AND cab.fecha <  @param1
+            `;
 
             const dataQuery = `
                 SELECT
@@ -160,7 +204,7 @@ export class GarantyExtController {
                         WHEN EXISTS (SELECT 1 FROM ptv_detcuadre_caja WHERE num_doc = cab.num_doc AND for_pag = '39')
                             THEN 'SUFI BANCOLOMBIA'
                         ELSE 'CONTADO'
-                    END AS FormaPago,
+                    END AS formaPago,
                     bod.cod_bod,
                     bod.nom_bod,
                     ite.cos_pro AS valor,
@@ -174,16 +218,13 @@ export class GarantyExtController {
                 OFFSET ${offset} ROWS FETCH NEXT ${limit} ROWS ONLY;
             `;
 
-            // Ejecutar consultas en paralelo
-            const [countResult, dataResult] = await Promise.all([
-                executeQuery(countQuery, [year], "CBBSAS"),
-                executeQuery(dataQuery, [year], "CBBSAS")
-            ]);
+            const countResult = await executeQuery(countQuery, [fechaInicio, fechaFin], "CBBSAS");
+            const dataResult = await executeQuery(dataQuery, [fechaInicio, fechaFin], "CBBSAS");
 
             const total = countResult.recordset[0].total;
             const rawRows: GarantyExtRawRow[] = dataResult.recordset || [];
-            const data: GarantyExtRow[] = rawRows.map(mapGarantyRow);
-            
+            const data = rawRows.map(mapGarantyRow);
+
             const totalPages = Math.ceil(total / limit);
             const { next, prev } = buildPaginationLinks(req, page, limit, total);
 
@@ -208,3 +249,4 @@ export class GarantyExtController {
         }
     }
 }
+
